@@ -66,9 +66,9 @@ Restart ComfyUI completely. The new nodes should appear in the "Add Node" menu u
 
 Here are some of the features and improvements planned for the future of this project:
 
-[] Timestamp Support
+- [ ] Timestamp Support
 
-[] Support for Other Canary Models
+- [ ] Support for Other Canary Models
 
 
 ### License
