@@ -3,11 +3,17 @@
 
 This custom node provides three distinct functionalities, matching the core capabilities of the Canary-1b-v2 model:
 
+<p align="center">
+  <img src="docs/image1.png" alt="workflow screen">
+</p>
+
+
 *   **`Canary Transcription (ASR)`**: Transcribes audio from one of the 25 supported languages into text of the same language.
 *   **`Canary Translate to English (AST)`**: Translates audio from one of 24 source languages directly into English text.
 *   **`Canary Translate from English (AST)`**: Translates English audio directly into one of the 24 other supported languages.
 
 ---
+
 
 ### Installation
 
