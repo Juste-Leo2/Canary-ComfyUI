@@ -66,8 +66,9 @@ Restart ComfyUI completely. The new nodes should appear in the "Add Node" menu u
 
 Here are some of the features and improvements planned for the future of this project:
 
-*   **Timestamp Support:** Re-introducing support for generating accurate timestamps. This will likely be explored via a more robust method like forced-alignment to ensure stability and precision.
-*   **Support for Other Canary Models:** Extending compatibility to include other versions or future releases of NVIDIA's Canary models as they become available.
+[ ] Timestamp Support
+[ ] Support for Other Canary Models
+
 
 ### License
 
