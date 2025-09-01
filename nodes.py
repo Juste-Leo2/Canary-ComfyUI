@@ -3,214 +3,171 @@
 import os
 import folder_paths
 import torch
-import json
 import tempfile
+import numpy as np
+import torchaudio
+from scipy.io.wavfile import write as write_wav
 
-# Message d'erreur si NeMo n'est pas installé
+# Enregistrement du dossier de modèles
+canary_models_path = os.path.join(folder_paths.models_dir, "canary")
+if not os.path.exists(canary_models_path):
+    try:
+        os.makedirs(canary_models_path)
+        print(f"Canary-ComfyUI: Created directory {canary_models_path}")
+    except OSError as e:
+        print(f"Canary-ComfyUI: Error creating directory {canary_models_path}: {e}")
+folder_paths.add_model_folder_path("canary", canary_models_path)
+
+# Import de NeMo avec gestion d'erreur
 try:
-    from nemo.collections.asr.models import ASRModel, EncDecMultiTaskModel
+    from nemo.collections.asr.models import ASRModel
 except ImportError:
     print("################################################################")
     print("Canary-ComfyUI: NeMo not found. Please install it by running:")
-    print("pip install -U nemo_toolkit['asr']")
+    print("pip install -U nemo_toolkit['asr'] scipy numpy torchaudio")
     print("in your ComfyUI environment.")
     print("################################################################")
 
-# Dictionnaire pour mettre en cache les modèles chargés et éviter de les recharger
+# --- Constantes et Cache ---
+
 CACHED_MODELS = {}
+ASR_LANGS = sorted(["en", "bg", "hr", "cs", "da", "nl", "et", "fi", "fr", "de", "el", "hu", "it", "lv", "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk"])
+TRANSLATION_LANGS = sorted([lang for lang in ASR_LANGS if lang != 'en'])
 
 # --- Fonctions Utilitaires ---
 
 def get_canary_model_list():
-    """Retourne la liste des modèles trouvés dans le dossier canary."""
-    models_path = folder_paths.get_folder_paths("canary")
-    if not models_path:
-        return []
-    
-    models = []
-    for model_path in models_path:
-        if os.path.exists(model_path):
-            models.extend([f for f in os.listdir(model_path) if f.endswith('.nemo')])
-    return list(set(models))
+    return folder_paths.get_filename_list("canary")
 
-def format_timestamps(ts_data):
-    """Met en forme les données de timestamp en une chaîne de caractères lisible."""
-    if not ts_data:
-        return "No timestamp data available."
-
-    output_str = ""
-    if 'segment' in ts_data and ts_data['segment']:
-        output_str += "--- Segment Timestamps ---\n"
-        for stamp in ts_data['segment']:
-            output_str += f"{stamp['start']:.2f}s - {stamp['end']:.2f}s : {stamp['segment']}\n"
+def process_audio_and_run_model(model, audio, source_lang, target_lang):
+    """
+    Fonction helper simplifiée : prépare l'audio, exécute le modèle Canary 
+    et retourne UNIQUEMENT le texte résultant.
+    """
+    waveform, sample_rate = audio["waveform"], audio["sample_rate"]
     
-    if 'word' in ts_data and ts_data['word']:
-        output_str += "\n--- Word Timestamps ---\n"
-        for stamp in ts_data['word']:
-            output_str += f"{stamp['start']:.2f}s - {stamp['end']:.2f}s : {stamp['word']}\n"
-            
-    return output_str.strip() if output_str else "No timestamp data available."
+    if waveform.ndim > 2: waveform = waveform[0]
+    if waveform.ndim > 1 and waveform.shape[0] > 1:
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+    waveform = waveform.squeeze()
+
+    if sample_rate != 16000:
+        print(f"Canary-ComfyUI: Resampling audio from {sample_rate} Hz to 16000 Hz")
+        resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+        waveform = resampler(waveform)
+    
+    audio_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio_file:
+            audio_path = temp_audio_file.name
+            np_waveform = waveform.cpu().numpy()
+            scaled_waveform = np.int16(np_waveform / np.abs(np_waveform).max() * 32767) if np.abs(np_waveform).max() > 0 else np.int16(np_waveform)
+            write_wav(audio_path, 16000, scaled_waveform)
+
+        device = next(model.parameters()).device
+        task_name = "Translation" if source_lang != target_lang else "Transcription"
+        print(f"Canary-ComfyUI: Running {task_name} (source: {source_lang}, target: {target_lang}) on device: {device}")
+        
+        # Appel au modèle SANS l'option timestamps pour garantir la stabilité
+        output = model.transcribe(
+            [audio_path],
+            source_lang=source_lang,
+            target_lang=target_lang,
+            timestamps=False # Toujours à False
+        )
+        
+        text_result = output[0].text
+        
+    finally:
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+
+    return (text_result,) # Retourne un tuple avec un seul élément
 
 
 # --- Nodes ---
 
 class CanaryModelLoader:
-    """
-    Node pour charger un modèle Canary depuis le dossier ComfyUI/models/canary.
-    Il détecte automatiquement le type de modèle (ASRModel ou EncDecMultiTaskModel).
-    """
     @classmethod
     def INPUT_TYPES(s):
-        return {
-            "required": {
-                "model_name": (get_canary_model_list(), ),
-            }
-        }
-
+        return { "required": { "model_name": (get_canary_model_list(), ), } }
     RETURN_TYPES = ("CANARY_MODEL",)
-    RETURN_NAMES = ("canary_model",)
     FUNCTION = "load_model"
     CATEGORY = "Canary-ComfyUI"
-
     def load_model(self, model_name):
         model_path = folder_paths.get_full_path("canary", model_name)
-        if not model_path:
-            raise FileNotFoundError(f"Model {model_name} not found.")
-
+        if not model_path: raise FileNotFoundError(f"Model {model_name} not found.")
         if model_path in CACHED_MODELS:
             print(f"Canary-ComfyUI: Loading cached model '{model_name}'")
             return (CACHED_MODELS[model_path],)
-
-        print(f"Canary-ComfyUI: Loading model '{model_name}'...")
         
-        # Heuristique pour déterminer quelle classe utiliser pour le chargement
-        # Basé sur la documentation fournie, 'v2' utilise ASRModel, les autres EncDecMultiTaskModel
+        print(f"Canary-ComfyUI: Loading model '{model_name}'...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         try:
-            if 'v2' in model_name:
-                model = ASRModel.from_pretrained(model_path)
-            else:
-                model = EncDecMultiTaskModel.from_pretrained(model_path)
-                # Configuration de décodage standard pour les modèles MultiTask
-                decode_cfg = model.cfg.decoding
-                decode_cfg.beam.beam_size = 1
-                model.change_decoding_strategy(decode_cfg)
-
-            model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+            model = ASRModel.restore_from(restore_path=model_path, map_location=device)
+            model.to(device); model.eval()
             CACHED_MODELS[model_path] = model
-            print(f"Canary-ComfyUI: Model '{model_name}' loaded successfully.")
+            print(f"Canary-ComfyUI: Model '{model_name}' loaded successfully on {device}.")
             return (model,)
-
         except Exception as e:
-            raise RuntimeError(f"Failed to load Canary model {model_name}. Error: {e}")
+            print(f"Canary-ComfyUI: An error occurred while loading the model: {e}")
+            raise e
 
-
-class CanaryTranscriber:
-    """
-    Node unique pour la transcription et la traduction.
-    Il s'adapte au type de modèle chargé (v2, flash, 1b).
-    """
+class CanaryASRNode:
     @classmethod
     def INPUT_TYPES(s):
-        # Langues supportées par chaque type de modèle
-        LANGS_V2 = ["en", "bg", "hr", "cs", "da", "nl", "et", "fi", "fr", "de", "el", "hu", "it", "lv", "lt", "mt", "pl", "pt", "ro", "sk", "sl", "es", "sv", "ru", "uk"]
-        LANGS_MULTITASK = ["en", "de", "es", "fr"]
-
-        return {
-            "required": {
+        return { "required": {
                 "canary_model": ("CANARY_MODEL",),
-                "audio_path": ("STRING", {"default": "path/to/your/audio.wav"}),
-                "task": (["transcribe", "translate"],),
-                "source_lang": (LANGS_V2 + list(set(LANGS_MULTITASK) - set(LANGS_V2)), {"default": "en"}),
-                "target_lang": (LANGS_V2 + list(set(LANGS_MULTITASK) - set(LANGS_V2)), {"default": "en"}),
-                "pnc": (["yes", "no"],),
-                "get_timestamps": (["yes", "no"],),
-            }
-        }
-
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("text", "timestamps")
-    FUNCTION = "transcribe"
+                "audio": ("AUDIO",),
+                "language": (ASR_LANGS, {"default": "en"}),
+            }}
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
+    FUNCTION = "process"
     CATEGORY = "Canary-ComfyUI"
-    
-    def transcribe(self, canary_model, audio_path, task, source_lang, target_lang, pnc, get_timestamps):
-        if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"Audio file not found at: {audio_path}")
+    def process(self, canary_model, audio, language):
+        return process_audio_and_run_model(canary_model, audio, language, language)
 
-        device = next(canary_model.parameters()).device
-        print(f"Canary-ComfyUI: Running inference on device: {device}")
+class CanaryTranslateToENNode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return { "required": {
+                "canary_model": ("CANARY_MODEL",),
+                "audio": ("AUDIO",),
+                "source_lang": (TRANSLATION_LANGS, {"default": "fr"}),
+            }}
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
+    FUNCTION = "process"
+    CATEGORY = "Canary-ComfyUI"
+    def process(self, canary_model, audio, source_lang):
+        return process_audio_and_run_model(canary_model, audio, source_lang, 'en')
         
-        # --- Logique pour ASRModel (ex: Canary-1b-v2) ---
-        if isinstance(canary_model, ASRModel):
-            print("Canary-ComfyUI: Using ASRModel (v2) API.")
-            if task == "transcribe":
-                # Pour la transcription, la langue source et cible doivent être les mêmes
-                target_lang = source_lang
-            
-            output = canary_model.transcribe(
-                [audio_path],
-                source_lang=source_lang,
-                target_lang=target_lang,
-                timestamps=(get_timestamps == 'yes')
-            )
-            
-            text_result = output[0].text
-            ts_data = output[0].timestamp if hasattr(output[0], 'timestamp') else None
-            timestamps_result = format_timestamps(ts_data)
-        
-        # --- Logique pour EncDecMultiTaskModel (ex: canary-1b, flash) ---
-        elif isinstance(canary_model, EncDecMultiTaskModel):
-            print("Canary-ComfyUI: Using EncDecMultiTaskModel (flash/1b) API.")
-            
-            # Création du fichier manifeste temporaire
-            manifest = {
-                "audio_filepath": audio_path,
-                "source_lang": source_lang,
-                "target_lang": target_lang if task == "translate" else source_lang,
-                "pnc": pnc,
-            }
-
-            # Les modèles 'flash' et '1b' ont des manifestes légèrement différents
-            model_name = canary_model.cfg.name
-            if 'flash' in model_name.lower():
-                 manifest["timestamp"] = get_timestamps
-            else: # Modèle 'canary-1b' standard
-                manifest["duration"] = None # NeMo gère ça automatiquement
-                manifest["taskname"] = "s2t_translation" if task == "translate" else "asr"
-                manifest["answer"] = "na"
-
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_manifest:
-                tmp_manifest.write(json.dumps(manifest) + '\n')
-                manifest_path = tmp_manifest.name
-
-            try:
-                # Transcrire en utilisant le manifeste
-                output = canary_model.transcribe(
-                    manifest_path,
-                    batch_size=1,
-                )
-                
-                text_result = output[0].text
-                ts_data = output[0].timestamp if hasattr(output[0], 'timestamp') else None
-                timestamps_result = format_timestamps(ts_data)
-                
-            finally:
-                # S'assurer que le fichier temporaire est supprimé
-                os.remove(manifest_path)
-                
-        else:
-            raise TypeError("Unsupported Canary model type.")
-            
-        return (text_result, timestamps_result)
-
+class CanaryTranslateFromENNode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return { "required": {
+                "canary_model": ("CANARY_MODEL",),
+                "audio": ("AUDIO",),
+                "target_lang": (TRANSLATION_LANGS, {"default": "fr"}),
+            }}
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("text",)
+    FUNCTION = "process"
+    CATEGORY = "Canary-ComfyUI"
+    def process(self, canary_model, audio, target_lang):
+        return process_audio_and_run_model(canary_model, audio, 'en', target_lang)
 
 # --- Mappings pour ComfyUI ---
-
 NODE_CLASS_MAPPINGS = {
     "CanaryModelLoader": CanaryModelLoader,
-    "CanaryTranscriber": CanaryTranscriber
+    "CanaryASRNode": CanaryASRNode,
+    "CanaryTranslateToENNode": CanaryTranslateToENNode,
+    "CanaryTranslateFromENNode": CanaryTranslateFromENNode,
 }
-
 NODE_DISPLAY_NAME_MAPPINGS = {
     "CanaryModelLoader": "Load Canary Model",
-    "CanaryTranscriber": "Transcribe with Canary"
+    "CanaryASRNode": "Canary Transcription (ASR)",
+    "CanaryTranslateToENNode": "Canary Translate to English (AST)",
+    "CanaryTranslateFromENNode": "Canary Translate from English (AST)",
 }
