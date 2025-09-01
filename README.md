@@ -1,11 +1,13 @@
 
-#Canary-ComfyUI
+# Canary-ComfyUI
 
 This custom node provides three distinct functionalities, matching the core capabilities of the Canary-1b-v2 model:
 
 *   **`Canary Transcription (ASR)`**: Transcribes audio from one of the 25 supported languages into text of the same language.
 *   **`Canary Translate to English (AST)`**: Translates audio from one of 24 source languages directly into English text.
 *   **`Canary Translate from English (AST)`**: Translates English audio directly into one of the 24 other supported languages.
+
+---
 
 ### Installation
 
@@ -60,7 +62,19 @@ Restart ComfyUI completely. The new nodes should appear in the "Add Node" menu u
 3.  Connect the `CANARY_MODEL` and `AUDIO` outputs to one of the three task nodes (`Canary Transcription`, `Canary Translate to English`, or `Canary Translate from English`).
 4.  Select the desired languages and queue the prompt. The resulting text will be available as an output.
 
+### Roadmap
+
+Here are some of the features and improvements planned for the future of this project:
+
+*   **Timestamp Support:** Re-introducing support for generating accurate timestamps. This will likely be explored via a more robust method like forced-alignment to ensure stability and precision.
+*   **Support for Other Canary Models:** Extending compatibility to include other versions or future releases of NVIDIA's Canary models as they become available.
+
 ### License
 
 *   The Python code in this repository is released under the **Apache 2.0 License**.
 *   The NVIDIA Canary-1b-v2 model is subject to its own license, the **[Creative Commons Attribution-NonCommercial 4.0 International](https://huggingface.co/datasets/choosealicense/licenses/blob/main/markdown/cc-by-4.0.md)**. Please review its terms before use, especially regarding commercial applications.
+
+### Acknowledgements
+
+*   A big thank you to **NVIDIA** for creating and open-sourcing the [Canary model](https://huggingface.co/nvidia).
+*   Thanks to the entire **[ComfyUI team](https://github.com/comfyanonymous/ComfyUI)** for building such a flexible and powerful tool for the community.
