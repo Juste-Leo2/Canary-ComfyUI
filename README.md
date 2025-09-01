@@ -1,3 +1,6 @@
+
+#Canary-ComfyUI
+
 This custom node provides three distinct functionalities, matching the core capabilities of the Canary-1b-v2 model:
 
 *   **`Canary Transcription (ASR)`**: Transcribes audio from one of the 25 supported languages into text of the same language.
@@ -60,4 +63,4 @@ Restart ComfyUI completely. The new nodes should appear in the "Add Node" menu u
 ### License
 
 *   The Python code in this repository is released under the **Apache 2.0 License**.
-*   The NVIDIA Canary-1b-v2 model is subject to its own license, the **[Creative Commons Attribution-NonCommercial 4.0 International](https://huggingface.co/nvidia/canary-1b-v2/blob/main/LICENSE)**. Please review its terms before use, especially regarding commercial applications.
+*   The NVIDIA Canary-1b-v2 model is subject to its own license, the **[Creative Commons Attribution-NonCommercial 4.0 International](https://huggingface.co/datasets/choosealicense/licenses/blob/main/markdown/cc-by-4.0.md)**. Please review its terms before use, especially regarding commercial applications.
