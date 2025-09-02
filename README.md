@@ -1,16 +1,17 @@
 
 # Canary-ComfyUI
 
-This custom node provides three distinct functionalities, matching the core capabilities of the Canary-1b-v2 model:
+NVIDIA’s Canary is a state-of-the-art multilingual speech-to-text and speech-translation model (ASR + AST) offering punctuation and capitalization 
+this ComfyUI custom node supports :
+- canary-1b-v2, 
+- canary-1b-flash, 
+- canary-180m-flash.
+
 
 <p align="center">
   <img src="docs/image1.png" alt="workflow screen">
 </p>
 
-
-*   **`Canary Transcription (ASR)`**: Transcribes audio from one of the 25 supported languages into text of the same language.
-*   **`Canary Translate to English (AST)`**: Translates audio from one of 24 source languages directly into English text.
-*   **`Canary Translate from English (AST)`**: Translates English audio directly into one of the 24 other supported languages.
 
 ---
 
@@ -73,9 +74,8 @@ Restart ComfyUI completely. The new nodes should appear in the "Add Node" menu u
 Here are some of the features and improvements planned for the future of this project:
 
 - [ ] Timestamp Support
-
-- [ ] Support for Other Canary Models
-
+- [x] Support for main SOTA Canary Models 
+- [ ] Support canary-1b
 
 ### License
 
