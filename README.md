@@ -76,7 +76,7 @@ Here are some of the features and improvements planned for the future of this pr
 - [ ] Timestamp Support
 - [x] Support for main SOTA Canary Models 
 - [ ] Support canary-1b
-- [ ] node fusion for simplified use
+- [ ] nodes fusion for simplified use
 
 ### License
 
