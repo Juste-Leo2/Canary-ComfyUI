@@ -1,7 +1,7 @@
 [project]
 name = "canary-comfyui"
 description = "This node pack integrates the core capabilities of the Canary-1b-v2 model, providing three main features: it can transcribe audio in any of 25 supported languages into text in the same language, translate audio from 24 source languages directly into English, and translate English audio directly into one of the 24 other supported languages."
-version = "1.0.0"
+version = "1.0.1"
 license = {file = "LICENSE"} 
 # classifiers = [
 #     # For OS-independent nodes (works on all operating systems)
@@ -29,7 +29,7 @@ Documentation = "https://github.com/Juste-Leo2/Canary-ComfyUI/wiki"
 "Bug Tracker" = "https://github.com/Juste-Leo2/Canary-ComfyUI/issues"
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "justeleo"
 DisplayName = "Canary-ComfyUI"
 Icon = ""
 includes = [] 
